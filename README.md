@@ -59,23 +59,23 @@ run-shell ~/repos/tmux-text-object/text_object.tmux
 
 1. Enter copy-mode: `prefix + [`
 2. Navigate to a word using standard Vi navigation keys
-3. Use text-object commands:
-   - `iw`: Yank inner word
-   - `aw`: Yank around word (including surrounding space)
-   - `iW`: Yank inner WORD
-   - `aW`: Yank around WORD (including surrounding space)
+3. Use text-object commands (Vim-style):
+   - `yiw`: Yank inner word
+   - `yaw`: Yank around word (including surrounding space)
+   - `yiW`: Yank inner WORD
+   - `yaW`: Yank around WORD (including surrounding space)
 
 ### Examples
 
 Given the text: `hello_world test`
 
-- Cursor on "hello_world" + `iw` → yanks "hello_world"
-- Cursor on "hello_world" + `aw` → yanks "hello_world " (with trailing space)
+- Cursor on "hello_world" + `yiw` → yanks "hello_world"
+- Cursor on "hello_world" + `yaw` → yanks "hello_world " (with trailing space)
 
 Given the text: `path/to/file.txt another`
 
-- Cursor on "path/to/file.txt" + `iW` → yanks "path/to/file.txt"
-- Cursor on "path/to/file.txt" + `aW` → yanks "path/to/file.txt " (with trailing space)
+- Cursor on "path/to/file.txt" + `yiW` → yanks "path/to/file.txt"
+- Cursor on "path/to/file.txt" + `yaW` → yanks "path/to/file.txt " (with trailing space)
 
 ## Text-Object Definitions
 
@@ -93,14 +93,14 @@ Given the text: `path/to/file.txt another`
 
 ## Clipboard Support
 
-The plugin automatically detects and uses the appropriate clipboard tool:
+The plugin automatically detects and uses the appropriate clipboard tool with the following priority:
 
-- **macOS**: `pbcopy`
-- **WSL**: `clip.exe`
-- **Linux (X11)**: `xclip`
-- **Linux (Wayland)**: `wl-copy`
+1. **WSL**: `clip.exe` (Windows Subsystem for Linux)
+2. **macOS**: `pbcopy`
+3. **Linux (X11)**: `xclip`
+4. **Linux (Wayland)**: `wl-copy`
 
-If no clipboard tool is found, text is still yanked to tmux's buffer.
+Text is always copied to tmux's buffer, and additionally copied to the system clipboard if a compatible tool is detected.
 
 ## Requirements
 
