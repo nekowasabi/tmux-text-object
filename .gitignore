@@ -1,0 +1,23 @@
+# Editor temporary files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Vim
+.*.sw[a-z]
+Session.vim
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# VSCode
+.vscode/
+
+# Temporary test files
+tmp/
+
+# OS
+Thumbs.db
