@@ -445,27 +445,10 @@ main() {
 
     echo "Start: $start, End: $end" >> "$DEBUG_LOG"
 
-    # Move cursor to start position and begin selection
-    tmux send-keys -X start-of-line
-    # Move to the correct column (start position)
-    for ((i=0; i<start; i++)); do
-        tmux send-keys -X cursor-right
-    done
+    # Extract selected text directly (NO CURSOR MOVEMENT!)
+    local selected_text="${line:$start:$((end - start + 1))}"
 
-    echo "Moved cursor to start position: $start" >> "$DEBUG_LOG"
-
-    # Begin selection
-    tmux send-keys -X begin-selection
-
-    echo "Began selection" >> "$DEBUG_LOG"
-
-    # Move to end position (inclusive)
-    local chars_to_select=$((end - start + 1))
-    for ((i=0; i<chars_to_select-1; i++)); do
-        tmux send-keys -X cursor-right
-    done
-
-    echo "Selected $chars_to_select characters" >> "$DEBUG_LOG"
+    echo "Selected text: '$selected_text'" >> "$DEBUG_LOG"
 
     # Detect clipboard tool
     # Priority: WSL (clip.exe) > macOS (pbcopy) > Linux X11 (xclip) > Linux Wayland (wl-copy)
@@ -482,15 +465,18 @@ main() {
 
     echo "Clipboard command: $clipboard_cmd" >> "$DEBUG_LOG"
 
-    # Use tmux's copy-pipe-and-cancel (same as visual mode yank)
+    # Copy to system clipboard (if available)
     if [[ -n "$clipboard_cmd" ]]; then
-        tmux send-keys -X copy-pipe-and-cancel "$clipboard_cmd"
-        echo "Used copy-pipe-and-cancel with: $clipboard_cmd" >> "$DEBUG_LOG"
-    else
-        # No clipboard tool, just use copy-selection-and-cancel
-        tmux send-keys -X copy-selection-and-cancel
-        echo "Used copy-selection-and-cancel (no clipboard tool)" >> "$DEBUG_LOG"
+        echo -n "$selected_text" | eval "$clipboard_cmd"
+        echo "Copied to system clipboard with: $clipboard_cmd" >> "$DEBUG_LOG"
     fi
+
+    # Copy to tmux buffer
+    tmux set-buffer -- "$selected_text"
+    echo "Copied to tmux buffer" >> "$DEBUG_LOG"
+
+    # Exit copy-mode
+    tmux send-keys -X cancel
 
     echo "Done" >> "$DEBUG_LOG"
     echo "" >> "$DEBUG_LOG"
