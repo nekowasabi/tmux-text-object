@@ -25,8 +25,12 @@ This plugin brings Vim's text-object functionality to tmux's copy-mode-vi, allow
 - **i{** / **a{** (or **i}** / **a}**): Yank inside/around curly braces
 - **i<** / **a<** (or **i>** / **a>**): Yank inside/around angle brackets
 
+### Additional Features
 - Automatically exits copy-mode after yanking (just like Vim's `y` operator)
 - Cross-platform clipboard support (pbcopy, clip.exe, xclip, wl-copy)
+- Works in both normal mode (with text-objects) and visual mode (standard yank)
+- No cursor movement - directly extracts text from the current line
+- Copies to both tmux buffer and system clipboard simultaneously
 
 ## Installation
 
@@ -175,6 +179,46 @@ The plugin automatically detects and uses the appropriate clipboard tool with th
 4. **Linux (Wayland)**: `wl-copy`
 
 Text is always copied to tmux's buffer, and additionally copied to the system clipboard if a compatible tool is detected.
+
+## How It Works
+
+### Key Binding Architecture
+
+The plugin uses a sophisticated three-tier key table system:
+
+1. **Initial 'y' press**: The `yank-handler.sh` script detects if you're in visual or normal mode
+   - **Visual mode** (`#{selection_present} == 1`): Performs standard yank operation
+   - **Normal mode**: Switches to `text-object-yank` key table
+
+2. **Text-object modifier**: After 'y' in normal mode
+   - Pressing `i` switches to `text-object-inner` table (for inner text-objects)
+   - Pressing `a` switches to `text-object-around` table (for around text-objects)
+
+3. **Object specifier**: Final key determines the text-object type
+   - `w`, `W` for words
+   - `"`, `'`, `` ` `` for quotes
+   - `(`, `)`, `[`, `]`, `{`, `}`, `<`, `>` for brackets
+
+### Text Extraction
+
+The implementation uses tmux's `#{copy_cursor_line}` format variable to directly retrieve the text at the cursor position without any cursor movement. This approach:
+- Preserves cursor position during the operation
+- Eliminates visual artifacts from cursor movement
+- Provides reliable text extraction even in complex scenarios
+
+### Smart Text Selection
+
+- **Word boundaries**: Uses regex patterns (`[a-zA-Z0-9_]` for words, non-whitespace for WORDs)
+- **Quote matching**: Simple left-then-right search algorithm for quote pairs
+- **Bracket matching**: Searches for nearest bracket pair (opening or closing first)
+- **Whitespace handling**: For 'around' objects, prefers trailing whitespace, falls back to leading
+
+## Limitations
+
+- **Single-line only**: Text-objects work within the current line (no multi-line support)
+- **Simple matching**: Quote and bracket matching uses a basic algorithm without nesting support
+- **No escape handling**: Escaped quotes (like `\"`) are not treated specially
+- **Cursor requirement**: Cursor must be positioned on/within the target text-object
 
 ## Requirements
 
