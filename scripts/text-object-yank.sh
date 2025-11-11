@@ -14,6 +14,16 @@ set -u
 # Debug log file
 DEBUG_LOG="/tmp/tmux-text-object-debug.log"
 
+# Debug mode (set TMUX_TEXT_OBJECT_DEBUG=1 to enable detailed logging)
+DEBUG_MODE="${TMUX_TEXT_OBJECT_DEBUG:-0}"
+
+# Debug logging function
+debug_log() {
+    if [[ "$DEBUG_MODE" == "1" ]]; then
+        echo "[DEBUG] $*" >> "$DEBUG_LOG"
+    fi
+}
+
 # Text-object type (iw, aw, iW, aW)
 TEXT_OBJECT="${1:-}"
 
@@ -215,21 +225,70 @@ find_paragraph_range() {
     local cursor_y="$1"
     local mode="$2"
 
-    # Capture all visible lines from the pane
-    # Note: This captures from the scrollback buffer
-    local lines
-    mapfile -t lines < <(tmux capture-pane -p)
+    # Capture the entire scrollback history and visible pane
+    # -S - : Start from the beginning of scrollback history
+    # -p : Print to stdout
+
+    # Use absolute path for tmux to avoid PATH issues in run-shell context
+    local TMUX_BIN="/opt/homebrew/bin/tmux"
+    if [[ ! -x "$TMUX_BIN" ]]; then
+        # Fallback to PATH lookup
+        TMUX_BIN=$(command -v tmux)
+    fi
+
+    # Capture to temporary file to avoid process substitution issues
+    local temp_file="/tmp/tmux-text-object-capture-$$"
+    if ! "$TMUX_BIN" capture-pane -p -S - > "$temp_file" 2>&1; then
+        rm -f "$temp_file"
+        echo ""
+        return
+    fi
+
+    # Read lines from file into array
+    local lines=()
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        lines+=("$line")
+    done < "$temp_file"
+
+    # Clean up temp file
+    rm -f "$temp_file"
 
     local total_lines=${#lines[@]}
+
+    if [[ $total_lines -eq 0 ]]; then
+        echo ""
+        return
+    fi
+
+    debug_log "find_paragraph_range: cursor_y=$cursor_y, total_lines=$total_lines"
+
+    # Get history size to calculate cursor position in the captured buffer
+    local history_size
+    history_size=$(tmux display-message -p '#{history_size}')
+    history_size=${history_size:-0}
 
     # Get scroll position to calculate absolute line number
     local scroll_position
     scroll_position=$(tmux display-message -p '#{scroll_position}')
+    # Set default to 0 if empty (e.g., when not in copy-mode)
+    scroll_position=${scroll_position:-0}
 
-    # Calculate absolute line number in the capture
-    # In copy-mode, cursor_y is relative to the top of the visible pane
-    # scroll_position tells us how many lines we've scrolled back
-    local abs_line=$((cursor_y + scroll_position))
+    # Calculate absolute line number in the capture buffer
+    # The capture includes: [history lines][visible pane lines]
+    # - history_size: number of lines in scrollback history
+    # - scroll_position: how many lines scrolled up from normal view (0 = normal view)
+    # - cursor_y: relative position within the visible area (0-indexed)
+    #
+    # Normal view (scroll_position=0):
+    #   - visible area starts at: lines[history_size]
+    #   - cursor absolute position: history_size + cursor_y
+    #
+    # Scrolled view (scroll_position > 0):
+    #   - visible area starts at: lines[history_size - scroll_position]
+    #   - cursor absolute position: history_size - scroll_position + cursor_y
+    local abs_line=$((history_size - scroll_position + cursor_y))
+
+    debug_log "abs_line: history_size($history_size) - scroll_position($scroll_position) + cursor_y($cursor_y) = $abs_line"
 
     # Safety check: ensure abs_line is within bounds
     if [[ $abs_line -lt 0 || $abs_line -ge $total_lines ]]; then
@@ -528,11 +587,24 @@ main() {
         local start_line end_line
         read -r start_line end_line <<< "$para_range"
 
-        echo "Paragraph lines: start=$start_line, end=$end_line" >> "$DEBUG_LOG"
+        debug_log "Paragraph range: start=$start_line, end=$end_line"
 
         # Capture all lines and extract the paragraph
-        local lines
-        mapfile -t lines < <(tmux capture-pane -p)
+        # Must use same capture method as find_paragraph_range (with -S -)
+        local TMUX_BIN="/opt/homebrew/bin/tmux"
+        if [[ ! -x "$TMUX_BIN" ]]; then
+            TMUX_BIN=$(command -v tmux)
+        fi
+
+        local temp_file="/tmp/tmux-text-object-extract-$$"
+        "$TMUX_BIN" capture-pane -p -S - > "$temp_file" 2>&1
+
+        local lines=()
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            lines+=("$line")
+        done < "$temp_file"
+
+        rm -f "$temp_file"
 
         # Extract paragraph text (join lines with newlines)
         local selected_text=""
