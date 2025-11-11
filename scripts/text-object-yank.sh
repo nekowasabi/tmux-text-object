@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # text-object-yank.sh: Yank text-objects in tmux copy-mode-vi
 # Usage: text-object-yank.sh <text-object-type>
-# text-object-type: iw, aw, iW, aW
+#
+# Supported text-object types:
+#   Word objects: iw, aw, iW, aW
+#   Quote objects: i", a", i', a', i`, a`
+#   Bracket objects: i(, a(, i), a), i[, a[, i], a], i{, a{, i}, a}, i<, a<, i>, a>
+#
+# Note: Quote and bracket matching uses simple algorithm (no nesting support)
 
 set -u
 
@@ -10,6 +16,186 @@ DEBUG_LOG="/tmp/tmux-text-object-debug.log"
 
 # Text-object type (iw, aw, iW, aW)
 TEXT_OBJECT="${1:-}"
+
+# Find quote range using simple matching algorithm
+#
+# This function finds the nearest pair of quotes surrounding the cursor position.
+# It first searches left from the cursor to find a quote, then attempts to find
+# its matching pair by searching right. If no closing quote is found, it assumes
+# the first quote was a closing quote and searches left for an opening quote.
+#
+# Arguments:
+#   line       - The line of text to search in
+#   cursor_x   - Current cursor position (0-indexed)
+#   quote_char - The quote character to search for (", ', or `)
+#   mode       - "inner" (exclude quotes) or "around" (include quotes)
+#
+# Returns: "start end" (inclusive range) or "" if no pair found
+#
+# Note: Does not handle escaped quotes or nested structures
+find_quote_range() {
+    local line="$1"
+    local cursor_x="$2"
+    local quote_char="$3"
+    local mode="$4"
+
+    # Search left for nearest quote (from cursor position, inclusive)
+    local first_quote=-1
+    for ((i=cursor_x; i>=0; i--)); do
+        if [[ "${line:i:1}" == "$quote_char" ]]; then
+            first_quote=$i
+            break
+        fi
+    done
+
+    # If no quote found on the left, return empty
+    if [[ $first_quote -eq -1 ]]; then
+        echo ""
+        return
+    fi
+
+    # Try to find a closing quote after the first quote
+    local start=-1
+    local end=-1
+    for ((i=first_quote+1; i<${#line}; i++)); do
+        if [[ "${line:i:1}" == "$quote_char" ]]; then
+            # Found a pair: first_quote is opening, i is closing
+            start=$first_quote
+            end=$i
+            break
+        fi
+    done
+
+    # If no closing quote found, the first_quote might be a closing quote
+    # Search for an opening quote before it
+    if [[ $end -eq -1 ]]; then
+        for ((i=first_quote-1; i>=0; i--)); do
+            if [[ "${line:i:1}" == "$quote_char" ]]; then
+                start=$i
+                end=$first_quote
+                break
+            fi
+        done
+    fi
+
+    # If still no pair found, return empty
+    if [[ $start -eq -1 || $end -eq -1 ]]; then
+        echo ""
+        return
+    fi
+
+    # Calculate range based on mode
+    if [[ "$mode" == "inner" ]]; then
+        # inner: exclude quotes (content between quotes)
+        echo "$((start+1)) $((end-1))"
+    else
+        # around: include quotes
+        echo "$start $end"
+    fi
+}
+
+# Get matching bracket pair
+#
+# Given a bracket character (opening or closing), returns the corresponding
+# opening and closing bracket pair.
+#
+# Arguments:
+#   bracket - A bracket character: (, ), [, ], {, }, <, or >
+#
+# Returns: "open_bracket close_bracket" or "" if invalid bracket
+get_bracket_pair() {
+    local bracket="$1"
+    case "$bracket" in
+        '('|')') echo "( )" ;;
+        '['|']') echo "[ ]" ;;
+        '{'|'}') echo "{ }" ;;
+        '<'|'>') echo "< >" ;;
+        *) echo "" ;;
+    esac
+}
+
+# Find bracket range using simple matching algorithm
+#
+# This function finds the nearest pair of brackets surrounding the cursor position.
+# Unlike quote matching (where opening and closing are identical), brackets have
+# distinct opening and closing characters. The algorithm searches left from the
+# cursor for either bracket type, then searches in the appropriate direction for
+# its matching pair.
+#
+# Arguments:
+#   line          - The line of text to search in
+#   cursor_x      - Current cursor position (0-indexed)
+#   open_bracket  - The opening bracket character
+#   close_bracket - The closing bracket character
+#   mode          - "inner" (exclude brackets) or "around" (include brackets)
+#
+# Returns: "start end" (inclusive range) or "" if no pair found
+#
+# Note: Uses simple matching - does not handle nested brackets correctly
+find_bracket_range() {
+    local line="$1"
+    local cursor_x="$2"
+    local open_bracket="$3"
+    local close_bracket="$4"
+    local mode="$5"
+
+    # Search left for nearest bracket (from cursor position, inclusive)
+    local first_bracket=-1
+    local first_bracket_char=""
+    for ((i=cursor_x; i>=0; i--)); do
+        local char="${line:i:1}"
+        if [[ "$char" == "$open_bracket" || "$char" == "$close_bracket" ]]; then
+            first_bracket=$i
+            first_bracket_char="$char"
+            break
+        fi
+    done
+
+    # If no bracket found on the left, return empty
+    if [[ $first_bracket -eq -1 ]]; then
+        echo ""
+        return
+    fi
+
+    # Try to find a matching bracket
+    local start=-1
+    local end=-1
+
+    if [[ "$first_bracket_char" == "$open_bracket" ]]; then
+        # First bracket is opening, search right for closing
+        for ((i=first_bracket+1; i<${#line}; i++)); do
+            if [[ "${line:i:1}" == "$close_bracket" ]]; then
+                start=$first_bracket
+                end=$i
+                break
+            fi
+        done
+    else
+        # First bracket is closing, search left for opening
+        for ((i=first_bracket-1; i>=0; i--)); do
+            if [[ "${line:i:1}" == "$open_bracket" ]]; then
+                start=$i
+                end=$first_bracket
+                break
+            fi
+        done
+    fi
+
+    # If no pair found, return empty
+    if [[ $start -eq -1 || $end -eq -1 ]]; then
+        echo ""
+        return
+    fi
+
+    # Calculate range based on mode
+    if [[ "$mode" == "inner" ]]; then
+        # inner: exclude brackets
+        echo "$((start+1)) $((end-1))"
+    else
+        # around: include brackets
+        echo "$start $end"
+    fi
+}
 
 # Calculate word range based on text-object type
 # Arguments: line, cursor_x, text_object_type
@@ -146,6 +332,44 @@ calculate_word_range() {
                     fi
                 fi
             fi
+            ;;
+
+        # Quote text-objects (inner)
+        'i"'|"i'"|'i`')
+            local quote_char="${text_object:1:1}"  # Extract ", ', or `
+            local range=$(find_quote_range "$line" "$cursor_x" "$quote_char" "inner")
+            echo "$range"
+            return
+            ;;
+
+        # Quote text-objects (around)
+        'a"'|"a'"|'a`')
+            local quote_char="${text_object:1:1}"
+            local range=$(find_quote_range "$line" "$cursor_x" "$quote_char" "around")
+            echo "$range"
+            return
+            ;;
+
+        # Bracket text-objects (inner)
+        'i('|'i)'|'i['|'i]'|'i{'|'i}'|'i<'|'i>')
+            local bracket="${text_object:1:1}"
+            local pair=$(get_bracket_pair "$bracket")
+            local open_bracket="${pair%% *}"
+            local close_bracket="${pair##* }"
+            local range=$(find_bracket_range "$line" "$cursor_x" "$open_bracket" "$close_bracket" "inner")
+            echo "$range"
+            return
+            ;;
+
+        # Bracket text-objects (around)
+        'a('|'a)'|'a['|'a]'|'a{'|'a}'|'a<'|'a>')
+            local bracket="${text_object:1:1}"
+            local pair=$(get_bracket_pair "$bracket")
+            local open_bracket="${pair%% *}"
+            local close_bracket="${pair##* }"
+            local range=$(find_bracket_range "$line" "$cursor_x" "$open_bracket" "$close_bracket" "around")
+            echo "$range"
+            return
             ;;
 
         *)

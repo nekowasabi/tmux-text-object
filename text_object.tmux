@@ -24,9 +24,39 @@ tmux bind-key -T text-object-inner w run-shell "$CURRENT_DIR/scripts/text-object
 # yiW: yank inner WORD (non-whitespace characters)
 tmux bind-key -T text-object-inner W run-shell "$CURRENT_DIR/scripts/text-object-yank.sh iW"
 
+# Quote text-objects (inner)
+tmux bind-key -T text-object-inner '"' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i\"'"
+tmux bind-key -T text-object-inner "'" run-shell "$CURRENT_DIR/scripts/text-object-yank.sh \"i'\""
+tmux bind-key -T text-object-inner '`' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i\`'"
+
+# Bracket text-objects (inner)
+tmux bind-key -T text-object-inner '(' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i('"
+tmux bind-key -T text-object-inner ')' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i)'"
+tmux bind-key -T text-object-inner '[' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i['"
+tmux bind-key -T text-object-inner ']' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i]'"
+tmux bind-key -T text-object-inner '{' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i{'"
+tmux bind-key -T text-object-inner '}' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i}'"
+tmux bind-key -T text-object-inner '<' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i<'"
+tmux bind-key -T text-object-inner '>' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i>'"
+
 # Define text-object bindings for around text-objects
 # yaw: yank around word (word + surrounding whitespace)
 tmux bind-key -T text-object-around w run-shell "$CURRENT_DIR/scripts/text-object-yank.sh aw"
 
 # yaW: yank around WORD (WORD + surrounding whitespace)
 tmux bind-key -T text-object-around W run-shell "$CURRENT_DIR/scripts/text-object-yank.sh aW"
+
+# Quote text-objects (around)
+tmux bind-key -T text-object-around '"' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a\"'"
+tmux bind-key -T text-object-around "'" run-shell "$CURRENT_DIR/scripts/text-object-yank.sh \"a'\""
+tmux bind-key -T text-object-around '`' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a\`'"
+
+# Bracket text-objects (around)
+tmux bind-key -T text-object-around '(' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a('"
+tmux bind-key -T text-object-around ')' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a)'"
+tmux bind-key -T text-object-around '[' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a['"
+tmux bind-key -T text-object-around ']' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a]'"
+tmux bind-key -T text-object-around '{' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a{'"
+tmux bind-key -T text-object-around '}' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a}'"
+tmux bind-key -T text-object-around '<' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a<'"
+tmux bind-key -T text-object-around '>' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a>'"

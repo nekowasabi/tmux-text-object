@@ -4,14 +4,27 @@ Vim-like text-object yank functionality for tmux copy-mode-vi.
 
 ## Overview
 
-This plugin brings Vim's text-object functionality to tmux's copy-mode-vi, allowing you to quickly yank words and WORDs using familiar Vim motions like `iw`, `aw`, `iW`, and `aW`.
+This plugin brings Vim's text-object functionality to tmux's copy-mode-vi, allowing you to quickly yank words, WORDs, quoted text, and bracketed content using familiar Vim motions like `iw`, `yi"`, `ya(`, etc.
 
 ## Features
 
+### Word/WORD Text Objects
 - **iw (inner word)**: Yank a word (alphanumeric and underscore characters)
 - **aw (around word)**: Yank a word plus surrounding whitespace
 - **iW (inner WORD)**: Yank a WORD (non-whitespace characters)
 - **aW (around WORD)**: Yank a WORD plus surrounding whitespace
+
+### Quote Text Objects
+- **i"** / **a"**: Yank inside/around double quotes
+- **i'** / **a'**: Yank inside/around single quotes
+- **i`** / **a`**: Yank inside/around backticks
+
+### Bracket Text Objects
+- **i(** / **a(** (or **i)** / **a)**): Yank inside/around parentheses
+- **i[** / **a[** (or **i]** / **a]**): Yank inside/around square brackets
+- **i{** / **a{** (or **i}** / **a}**): Yank inside/around curly braces
+- **i<** / **a<** (or **i>** / **a>**): Yank inside/around angle brackets
+
 - Automatically exits copy-mode after yanking (just like Vim's `y` operator)
 - Cross-platform clipboard support (pbcopy, clip.exe, xclip, wl-copy)
 
@@ -60,22 +73,70 @@ run-shell ~/repos/tmux-text-object/text_object.tmux
 1. Enter copy-mode: `prefix + [`
 2. Navigate to a word using standard Vi navigation keys
 3. Use text-object commands (Vim-style):
+
+   **Word/WORD Objects:**
    - `yiw`: Yank inner word
    - `yaw`: Yank around word (including surrounding space)
    - `yiW`: Yank inner WORD
    - `yaW`: Yank around WORD (including surrounding space)
 
+   **Quote Objects:**
+   - `yi"`: Yank inside double quotes
+   - `ya"`: Yank around double quotes
+   - `yi'`: Yank inside single quotes
+   - `ya'`: Yank around single quotes
+   - `` yi` ``: Yank inside backticks
+   - `` ya` ``: Yank around backticks
+
+   **Bracket Objects:**
+   - `yi(` or `yi)`: Yank inside parentheses
+   - `ya(` or `ya)`: Yank around parentheses
+   - `yi[` or `yi]`: Yank inside square brackets
+   - `ya[` or `ya]`: Yank around square brackets
+   - `yi{` or `yi}`: Yank inside curly braces
+   - `ya{` or `ya}`: Yank around curly braces
+   - `yi<` or `yi>`: Yank inside angle brackets
+   - `ya<` or `ya>`: Yank around angle brackets
+
 ### Examples
+
+**Word Examples:**
 
 Given the text: `hello_world test`
 
-- Cursor on "hello_world" + `yiw` → yanks "hello_world"
-- Cursor on "hello_world" + `yaw` → yanks "hello_world " (with trailing space)
+- Cursor on "hello_world" + `yiw` → yanks `hello_world`
+- Cursor on "hello_world" + `yaw` → yanks `hello_world ` (with trailing space)
 
 Given the text: `path/to/file.txt another`
 
-- Cursor on "path/to/file.txt" + `yiW` → yanks "path/to/file.txt"
-- Cursor on "path/to/file.txt" + `yaW` → yanks "path/to/file.txt " (with trailing space)
+- Cursor on "path/to/file.txt" + `yiW` → yanks `path/to/file.txt`
+- Cursor on "path/to/file.txt" + `yaW` → yanks `path/to/file.txt ` (with trailing space)
+
+**Quote Examples:**
+
+Given the text: `echo "hello world" 'test'`
+
+- Cursor on "hello" + `yi"` → yanks `hello world` (without quotes)
+- Cursor on "hello" + `ya"` → yanks `"hello world"` (with quotes)
+- Cursor on "test" + `yi'` → yanks `test`
+- Cursor on "test" + `ya'` → yanks `'test'`
+
+**Bracket Examples:**
+
+Given the text: `func(arg1, arg2)`
+
+- Cursor on "arg1" + `yi(` → yanks `arg1, arg2`
+- Cursor on "arg1" + `ya(` → yanks `(arg1, arg2)`
+
+Given the text: `array[0]`
+
+- Cursor on "0" + `yi[` → yanks `0`
+- Cursor on "0" + `ya[` → yanks `[0]`
+
+Given the text: `{key: value}`
+
+- Cursor on "key" + `yi{` → yanks `key: value`
+- Cursor on "key" + `ya{` → yanks `{key: value}`
 
 ## Text-Object Definitions
 
@@ -84,12 +145,25 @@ Given the text: `path/to/file.txt another`
 - **word**: Consists of alphanumeric characters and underscores `[a-zA-Z0-9_]` (Vim's `iskeyword` equivalent)
 - **WORD**: Consists of any non-whitespace characters
 
+### Quote Text Objects
+
+- **Quotes**: Double quotes `"`, single quotes `'`, and backticks `` ` ``
+- **Inner (i)**: Selects text inside quotes (excludes quote characters)
+- **Around (a)**: Selects text including quotes
+
+### Bracket Text Objects
+
+- **Brackets**: Parentheses `()`, square brackets `[]`, curly braces `{}`, angle brackets `<>`
+- **Inner (i)**: Selects text inside brackets (excludes bracket characters)
+- **Around (a)**: Selects text including brackets
+- **Note**: Uses simple matching (finds nearest pair, does not handle nested brackets)
+
 ### Inner vs Around
 
 - **inner (i)**: Selects only the text-object itself
-- **around (a)**: Selects the text-object plus surrounding whitespace
-  - Prefers trailing whitespace
-  - Falls back to leading whitespace if no trailing whitespace exists
+- **around (a)**: Selects the text-object plus surrounding whitespace (for words) or delimiters (for quotes/brackets)
+  - For words: Prefers trailing whitespace, falls back to leading whitespace if no trailing whitespace exists
+  - For quotes/brackets: Includes the delimiter characters
 
 ## Clipboard Support
 
