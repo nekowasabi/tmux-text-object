@@ -25,6 +25,10 @@ This plugin brings Vim's text-object functionality to tmux's copy-mode-vi, allow
 - **i{** / **a{** (or **i}** / **a}**): Yank inside/around curly braces
 - **i<** / **a<** (or **i>** / **a>**): Yank inside/around angle brackets
 
+### Paragraph Text Objects
+- **ip (inner paragraph)**: Yank a paragraph (text block separated by blank lines)
+- **ap (around paragraph)**: Yank a paragraph plus surrounding blank lines
+
 ### Additional Features
 - Automatically exits copy-mode after yanking (just like Vim's `y` operator)
 - Cross-platform clipboard support (pbcopy, clip.exe, xclip, wl-copy)
@@ -102,6 +106,10 @@ run-shell ~/repos/tmux-text-object/text_object.tmux
    - `yi<` or `yi>`: Yank inside angle brackets
    - `ya<` or `ya>`: Yank around angle brackets
 
+   **Paragraph Objects:**
+   - `yip`: Yank inner paragraph (text block without blank lines)
+   - `yap`: Yank around paragraph (text block with surrounding blank lines)
+
 ### Examples
 
 **Word Examples:**
@@ -142,6 +150,32 @@ Given the text: `{key: value}`
 - Cursor on "key" + `yi{` → yanks `key: value`
 - Cursor on "key" + `ya{` → yanks `{key: value}`
 
+**Paragraph Examples:**
+
+Given the text:
+```
+First paragraph line 1
+First paragraph line 2
+
+Second paragraph line 1
+Second paragraph line 2
+```
+
+- Cursor on "First paragraph line 1" + `yip` → yanks:
+  ```
+  First paragraph line 1
+  First paragraph line 2
+  ```
+  (without blank line)
+
+- Cursor on "First paragraph line 1" + `yap` → yanks:
+  ```
+  First paragraph line 1
+  First paragraph line 2
+
+  ```
+  (with blank line after)
+
 ## Text-Object Definitions
 
 ### Word vs WORD
@@ -161,6 +195,14 @@ Given the text: `{key: value}`
 - **Inner (i)**: Selects text inside brackets (excludes bracket characters)
 - **Around (a)**: Selects text including brackets
 - **Note**: Uses simple matching (finds nearest pair, does not handle nested brackets)
+
+### Paragraph Text Objects
+
+- **Paragraph**: A block of text separated by blank lines (lines that are empty or contain only whitespace)
+- **Inner (ip)**: Selects the paragraph content only (excludes surrounding blank lines)
+  - If cursor is on a blank line, no text is selected (consistent with Vim behavior)
+- **Around (ap)**: Selects the paragraph plus one blank line before and/or after (if they exist)
+- **Note**: This is the first multi-line text-object, supporting text that spans multiple lines
 
 ### Inner vs Around
 
@@ -198,13 +240,23 @@ The plugin uses a sophisticated three-tier key table system:
    - `w`, `W` for words
    - `"`, `'`, `` ` `` for quotes
    - `(`, `)`, `[`, `]`, `{`, `}`, `<`, `>` for brackets
+   - `p` for paragraphs
 
 ### Text Extraction
 
-The implementation uses tmux's `#{copy_cursor_line}` format variable to directly retrieve the text at the cursor position without any cursor movement. This approach:
+The implementation uses two different approaches depending on the text-object type:
+
+**Single-line text-objects** (words, quotes, brackets):
+- Uses tmux's `#{copy_cursor_line}` format variable to directly retrieve the text at the cursor position
 - Preserves cursor position during the operation
 - Eliminates visual artifacts from cursor movement
 - Provides reliable text extraction even in complex scenarios
+
+**Multi-line text-objects** (paragraphs):
+- Uses tmux's `capture-pane -p` to retrieve all visible lines in the pane
+- Scans up and down from the cursor position to find blank lines
+- Extracts and joins multiple lines with preserved newlines
+- Handles scroll position to correctly identify paragraph boundaries
 
 ### Smart Text Selection
 
@@ -215,7 +267,8 @@ The implementation uses tmux's `#{copy_cursor_line}` format variable to directly
 
 ## Limitations
 
-- **Single-line only**: Text-objects work within the current line (no multi-line support)
+- **Single-line for most text-objects**: Word, quote, and bracket text-objects work within the current line only
+  - **Exception**: Paragraph text-objects (ip/ap) support multi-line selection
 - **Simple matching**: Quote and bracket matching uses a basic algorithm without nesting support
 - **No escape handling**: Escaped quotes (like `\"`) are not treated specially
 - **Cursor requirement**: Cursor must be positioned on/within the target text-object

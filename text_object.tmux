@@ -39,6 +39,9 @@ tmux bind-key -T text-object-inner '}' run-shell "$CURRENT_DIR/scripts/text-obje
 tmux bind-key -T text-object-inner '<' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i<'"
 tmux bind-key -T text-object-inner '>' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'i>'"
 
+# Paragraph text-object (inner)
+tmux bind-key -T text-object-inner 'p' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'ip'"
+
 # Define text-object bindings for around text-objects
 # yaw: yank around word (word + surrounding whitespace)
 tmux bind-key -T text-object-around w run-shell "$CURRENT_DIR/scripts/text-object-yank.sh aw"
@@ -60,3 +63,6 @@ tmux bind-key -T text-object-around '{' run-shell "$CURRENT_DIR/scripts/text-obj
 tmux bind-key -T text-object-around '}' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a}'"
 tmux bind-key -T text-object-around '<' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a<'"
 tmux bind-key -T text-object-around '>' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'a>'"
+
+# Paragraph text-object (around)
+tmux bind-key -T text-object-around 'p' run-shell "$CURRENT_DIR/scripts/text-object-yank.sh 'ap'"

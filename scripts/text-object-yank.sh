@@ -197,6 +197,100 @@ find_bracket_range() {
     fi
 }
 
+# Find paragraph range using blank line detection
+#
+# This function finds a paragraph (text block separated by blank lines)
+# surrounding the cursor position. It searches up and down from the cursor
+# to find blank lines that delimit the paragraph.
+#
+# Arguments:
+#   cursor_y - Current cursor Y position (line number, 0-indexed from visible pane top)
+#   mode     - "inner" (exclude blank lines) or "around" (include surrounding blank lines)
+#
+# Returns: "start_line end_line" (inclusive line range, 0-indexed from capture-pane output)
+#          or "" if cursor is on a blank line (for inner mode)
+#
+# Note: Uses tmux capture-pane to get all visible lines in the pane
+find_paragraph_range() {
+    local cursor_y="$1"
+    local mode="$2"
+
+    # Capture all visible lines from the pane
+    # Note: This captures from the scrollback buffer
+    local lines
+    mapfile -t lines < <(tmux capture-pane -p)
+
+    local total_lines=${#lines[@]}
+
+    # Get scroll position to calculate absolute line number
+    local scroll_position
+    scroll_position=$(tmux display-message -p '#{scroll_position}')
+
+    # Calculate absolute line number in the capture
+    # In copy-mode, cursor_y is relative to the top of the visible pane
+    # scroll_position tells us how many lines we've scrolled back
+    local abs_line=$((cursor_y + scroll_position))
+
+    # Safety check: ensure abs_line is within bounds
+    if [[ $abs_line -lt 0 || $abs_line -ge $total_lines ]]; then
+        echo ""
+        return
+    fi
+
+    # Check if current line is blank
+    local current_line="${lines[$abs_line]}"
+    if [[ -z "$current_line" || "$current_line" =~ ^[[:space:]]*$ ]]; then
+        if [[ "$mode" == "inner" ]]; then
+            # For inner mode, don't select blank lines
+            echo ""
+            return
+        fi
+    fi
+
+    # Find paragraph start (search upward for blank line or start of buffer)
+    local para_start=$abs_line
+    while [[ $para_start -gt 0 ]]; do
+        local prev_line="${lines[$((para_start - 1))]}"
+        if [[ -z "$prev_line" || "$prev_line" =~ ^[[:space:]]*$ ]]; then
+            # Found blank line above
+            break
+        fi
+        ((para_start--))
+    done
+
+    # Find paragraph end (search downward for blank line or end of buffer)
+    local para_end=$abs_line
+    while [[ $para_end -lt $((total_lines - 1)) ]]; do
+        local next_line="${lines[$((para_end + 1))]}"
+        if [[ -z "$next_line" || "$next_line" =~ ^[[:space:]]*$ ]]; then
+            # Found blank line below
+            break
+        fi
+        ((para_end++))
+    done
+
+    # For "around" mode, include one blank line before and after (if they exist)
+    if [[ "$mode" == "around" ]]; then
+        # Include blank line before (if exists)
+        if [[ $para_start -gt 0 ]]; then
+            local prev_line="${lines[$((para_start - 1))]}"
+            if [[ -z "$prev_line" || "$prev_line" =~ ^[[:space:]]*$ ]]; then
+                ((para_start--))
+            fi
+        fi
+
+        # Include blank line after (if exists)
+        if [[ $para_end -lt $((total_lines - 1)) ]]; then
+            local next_line="${lines[$((para_end + 1))]}"
+            if [[ -z "$next_line" || "$next_line" =~ ^[[:space:]]*$ ]]; then
+                ((para_end++))
+            fi
+        fi
+    fi
+
+    echo "$para_start $para_end"
+}
+
 # Calculate word range based on text-object type
 # Arguments: line, cursor_x, text_object_type
 # Returns: "start end" (inclusive range)
@@ -408,6 +502,82 @@ main() {
 
     echo "Copy-mode cursor position: x=$cursor_x, y=$cursor_y" >> "$DEBUG_LOG"
 
+    # Handle paragraph text-objects separately (multi-line)
+    if [[ "$TEXT_OBJECT" == "ip" || "$TEXT_OBJECT" == "ap" ]]; then
+        echo "Processing paragraph text-object: $TEXT_OBJECT" >> "$DEBUG_LOG"
+
+        # Determine mode (inner or around)
+        local mode="inner"
+        if [[ "$TEXT_OBJECT" == "ap" ]]; then
+            mode="around"
+        fi
+
+        # Find paragraph range
+        local para_range
+        para_range=$(find_paragraph_range "$cursor_y" "$mode")
+
+        echo "Paragraph range: $para_range" >> "$DEBUG_LOG"
+
+        if [[ -z "$para_range" ]]; then
+            # No paragraph found (e.g., cursor on blank line in inner mode)
+            echo "ERROR: No paragraph range calculated" >> "$DEBUG_LOG"
+            tmux send-keys -X cancel
+            exit 0
+        fi
+
+        local start_line end_line
+        read -r start_line end_line <<< "$para_range"
+
+        echo "Paragraph lines: start=$start_line, end=$end_line" >> "$DEBUG_LOG"
+
+        # Capture all lines and extract the paragraph
+        local lines
+        mapfile -t lines < <(tmux capture-pane -p)
+
+        # Extract paragraph text (join lines with newlines)
+        local selected_text=""
+        for ((i=start_line; i<=end_line; i++)); do
+            if [[ $i -eq $start_line ]]; then
+                selected_text="${lines[$i]}"
+            else
+                selected_text="${selected_text}"$'\n'"${lines[$i]}"
+            fi
+        done
+
+        echo "Selected paragraph text:" >> "$DEBUG_LOG"
+        echo "$selected_text" >> "$DEBUG_LOG"
+
+        # Detect clipboard tool
+        local clipboard_cmd=""
+        if command -v clip.exe >/dev/null 2>&1; then
+            clipboard_cmd="clip.exe"
+        elif command -v pbcopy >/dev/null 2>&1; then
+            clipboard_cmd="pbcopy"
+        elif command -v xclip >/dev/null 2>&1; then
+            clipboard_cmd="xclip -selection clipboard"
+        elif command -v wl-copy >/dev/null 2>&1; then
+            clipboard_cmd="wl-copy"
+        fi
+
+        # Copy to system clipboard (if available)
+        if [[ -n "$clipboard_cmd" ]]; then
+            echo -n "$selected_text" | eval "$clipboard_cmd"
+            echo "Copied to system clipboard with: $clipboard_cmd" >> "$DEBUG_LOG"
+        fi
+
+        # Copy to tmux buffer
+        tmux set-buffer -- "$selected_text"
+        echo "Copied to tmux buffer" >> "$DEBUG_LOG"
+
+        # Exit copy-mode
+        tmux send-keys -X cancel
+
+        echo "Done (paragraph)" >> "$DEBUG_LOG"
+        echo "" >> "$DEBUG_LOG"
+        exit 0
+    fi
+
+    # Original single-line text-object handling
     # Get the scroll position in copy-mode
     local scroll_position
     scroll_position=$(tmux display-message -p '#{scroll_position}')
