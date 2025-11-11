@@ -21,3 +21,9 @@ tmp/
 
 # OS
 Thumbs.db
+
+# Kiro specs (track specs but ignore other .kiro files)
+# Note: Global .gitignore may ignore .kiro, so we need to explicitly allow it
+!.kiro/
+!.kiro/specs/
+!.kiro/specs/**
