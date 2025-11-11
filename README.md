@@ -35,7 +35,7 @@ This plugin brings Vim's text-object functionality to tmux's copy-mode-vi, allow
 1. Add the plugin to your `~/.tmux.conf`:
 
 ```tmux
-set -g @plugin 'yourusername/tmux-text-object'
+set -g @plugin 'nekowasabi/tmux-text-object'
 ```
 
 2. Press `prefix + I` to fetch and install the plugin.
@@ -45,7 +45,7 @@ set -g @plugin 'yourusername/tmux-text-object'
 1. Clone this repository:
 
 ```bash
-git clone https://github.com/yourusername/tmux-text-object.git ~/.tmux/plugins/tmux-text-object
+git clone https://github.com/nekowasabi/tmux-text-object.git ~/.tmux/plugins/tmux-text-object
 ```
 
 2. Add to your `~/.tmux.conf`:
