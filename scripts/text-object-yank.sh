@@ -3,9 +3,11 @@
 # Usage: text-object-yank.sh <text-object-type>
 #
 # Supported text-object types:
+#   Line object: yy
 #   Word objects: iw, aw, iW, aW
 #   Quote objects: i", a", i', a', i`, a`
 #   Bracket objects: i(, a(, i), a), i[, a[, i], a], i{, a{, i}, a}, i<, a<, i>, a>
+#   Paragraph objects: ip, ap
 #
 # Note: Quote and bracket matching uses simple algorithm (no nesting support)
 
@@ -560,6 +562,46 @@ main() {
     cursor_y=$(tmux display-message -p '#{copy_cursor_y}')
 
     echo "Copy-mode cursor position: x=$cursor_x, y=$cursor_y" >> "$DEBUG_LOG"
+
+    # Handle yy (yank line) text-object
+    if [[ "$TEXT_OBJECT" == "yy" ]]; then
+        echo "Processing yy (yank line)" >> "$DEBUG_LOG"
+
+        # Get current line content
+        local line
+        line=$(tmux display-message -p '#{copy_cursor_line}')
+
+        echo "Line content: '$line'" >> "$DEBUG_LOG"
+
+        # Detect clipboard tool
+        local clipboard_cmd=""
+        if command -v clip.exe >/dev/null 2>&1; then
+            clipboard_cmd="clip.exe"
+        elif command -v pbcopy >/dev/null 2>&1; then
+            clipboard_cmd="pbcopy"
+        elif command -v xclip >/dev/null 2>&1; then
+            clipboard_cmd="xclip -selection clipboard"
+        elif command -v wl-copy >/dev/null 2>&1; then
+            clipboard_cmd="wl-copy"
+        fi
+
+        # Copy to system clipboard (if available)
+        if [[ -n "$clipboard_cmd" ]]; then
+            echo -n "$line" | eval "$clipboard_cmd"
+            echo "Copied to system clipboard with: $clipboard_cmd" >> "$DEBUG_LOG"
+        fi
+
+        # Copy to tmux buffer
+        tmux set-buffer -- "$line"
+        echo "Copied to tmux buffer" >> "$DEBUG_LOG"
+
+        # Exit copy-mode
+        tmux send-keys -X cancel
+
+        echo "Done (yy)" >> "$DEBUG_LOG"
+        echo "" >> "$DEBUG_LOG"
+        exit 0
+    fi
 
     # Handle paragraph text-objects separately (multi-line)
     if [[ "$TEXT_OBJECT" == "ip" || "$TEXT_OBJECT" == "ap" ]]; then

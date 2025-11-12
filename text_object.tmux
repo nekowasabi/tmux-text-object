@@ -17,6 +17,9 @@ tmux bind-key -T text-object-yank i switch-client -T text-object-inner
 # When 'a' is pressed after 'y', switch to 'text-object-around' table
 tmux bind-key -T text-object-yank a switch-client -T text-object-around
 
+# When 'y' is pressed after 'y', yank the current line (yy behavior)
+tmux bind-key -T text-object-yank y run-shell "$CURRENT_DIR/scripts/text-object-yank.sh yy"
+
 # Define text-object bindings for inner text-objects
 # yiw: yank inner word (word characters only)
 tmux bind-key -T text-object-inner w run-shell "$CURRENT_DIR/scripts/text-object-yank.sh iw"
