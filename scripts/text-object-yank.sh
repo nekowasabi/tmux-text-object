@@ -542,6 +542,26 @@ calculate_word_range() {
 }
 
 # Main execution (when called from tmux)
+# Get line at cursor position using capture-pane
+# #{copy_cursor_line} strips trailing whitespace, which causes misalignment
+# with cursor_x. Using capture-pane preserves the exact line content.
+get_line_at_cursor() {
+    local cursor_y="$1"
+    local scroll_position
+
+    scroll_position=$(tmux display-message -p '#{scroll_position}')
+    scroll_position=${scroll_position:-0}
+
+    if [[ $scroll_position -gt 0 ]]; then
+        # スクロールした状態: 履歴を遡って取得
+        local line_offset=$((-(scroll_position - cursor_y)))
+        tmux capture-pane -p -S "$line_offset" -E "$line_offset"
+    else
+        # 通常表示: カーソル位置の行をそのまま取得
+        tmux capture-pane -p -S "$cursor_y" -E "$cursor_y"
+    fi
+}
+
 main() {
     echo "=== text-object-yank.sh DEBUG ===" >> "$DEBUG_LOG"
     echo "Timestamp: $(date)" >> "$DEBUG_LOG"
@@ -567,9 +587,11 @@ main() {
     if [[ "$TEXT_OBJECT" == "yy" ]]; then
         echo "Processing yy (yank line)" >> "$DEBUG_LOG"
 
-        # Get current line content
+        # Get current line content using get_line_at_cursor
+        # #{copy_cursor_line} strips trailing whitespace, which causes misalignment
         local line
-        line=$(tmux display-message -p '#{copy_cursor_line}')
+        cursor_y=$(tmux display-message -p '#{copy_cursor_y}')
+        line=$(get_line_at_cursor "$cursor_y")
 
         echo "Line content: '$line'" >> "$DEBUG_LOG"
 
@@ -708,7 +730,7 @@ main() {
     # capture-pane with -p captures the visible pane content
     # We need to get the line at the cursor position in copy-mode
     local line
-    line=$(tmux display-message -p '#{copy_cursor_line}')
+    line=$(get_line_at_cursor "$cursor_y")
 
     echo "Line content (from copy_cursor_line): '$line'" >> "$DEBUG_LOG"
 
