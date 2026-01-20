@@ -26,6 +26,75 @@ debug_log() {
     fi
 }
 
+# Get current line content using capture-pane
+# This is a workaround for tmux issue #3787 where #{copy_cursor_line}
+# returns only a partial line instead of the full line content.
+#
+# Arguments:
+#   cursor_y - Current cursor Y position (line number, 0-indexed from visible pane top)
+#
+# Returns: The full content of the current line
+get_current_line() {
+    local cursor_y="$1"
+
+    # Use absolute path for tmux to avoid PATH issues in run-shell context
+    local TMUX_BIN="/opt/homebrew/bin/tmux"
+    if [[ ! -x "$TMUX_BIN" ]]; then
+        TMUX_BIN=$(command -v tmux)
+    fi
+
+    # Capture the entire scrollback history and visible pane
+    # This is the same method used by find_paragraph_range() which works correctly
+    local temp_file="/tmp/tmux-text-object-line-$$"
+    if ! "$TMUX_BIN" capture-pane -p -S - > "$temp_file" 2>&1; then
+        rm -f "$temp_file"
+        echo ""
+        return
+    fi
+
+    # Read lines from file into array
+    local lines=()
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        lines+=("$line")
+    done < "$temp_file"
+
+    # Clean up temp file
+    rm -f "$temp_file"
+
+    local total_lines=${#lines[@]}
+    if [[ $total_lines -eq 0 ]]; then
+        echo ""
+        return
+    fi
+
+    # Get history size and scroll position to calculate absolute line number
+    local history_size
+    history_size=$("$TMUX_BIN" display-message -p '#{history_size}')
+    history_size=${history_size:-0}
+
+    local scroll_position
+    scroll_position=$("$TMUX_BIN" display-message -p '#{scroll_position}')
+    scroll_position=${scroll_position:-0}
+
+    # Calculate absolute line number in the capture buffer
+    # The capture includes: [history lines][visible pane lines]
+    local abs_line=$((history_size - scroll_position + cursor_y))
+
+    debug_log "get_current_line: cursor_y=$cursor_y, history_size=$history_size, scroll_position=$scroll_position, abs_line=$abs_line, total_lines=$total_lines"
+
+    # Safety check: ensure abs_line is within bounds
+    if [[ $abs_line -lt 0 || $abs_line -ge $total_lines ]]; then
+        debug_log "get_current_line: abs_line out of bounds"
+        echo ""
+        return
+    fi
+
+    local line="${lines[$abs_line]}"
+    debug_log "get_current_line: captured line='$line'"
+
+    echo "$line"
+}
+
 # Text-object type (iw, aw, iW, aW)
 TEXT_OBJECT="${1:-}"
 
@@ -587,11 +656,10 @@ main() {
     if [[ "$TEXT_OBJECT" == "yy" ]]; then
         echo "Processing yy (yank line)" >> "$DEBUG_LOG"
 
-        # Get current line content using get_line_at_cursor
+        # Get current line content using capture-pane (workaround for tmux issue #3787)
         # #{copy_cursor_line} strips trailing whitespace, which causes misalignment
         local line
-        cursor_y=$(tmux display-message -p '#{copy_cursor_y}')
-        line=$(get_line_at_cursor "$cursor_y")
+        line=$(get_current_line "$cursor_y")
 
         echo "Line content: '$line'" >> "$DEBUG_LOG"
 
@@ -726,13 +794,12 @@ main() {
     local pane_height
     pane_height=$(tmux display-message -p '#{pane_height}')
 
-    # Get current line content using copy_cursor_y
-    # capture-pane with -p captures the visible pane content
-    # We need to get the line at the cursor position in copy-mode
+    # Get current line content using capture-pane (workaround for tmux issue #3787)
+    # #{copy_cursor_line} returns only partial line content in some cases
     local line
-    line=$(get_line_at_cursor "$cursor_y")
+    line=$(get_current_line "$cursor_y")
 
-    echo "Line content (from copy_cursor_line): '$line'" >> "$DEBUG_LOG"
+    echo "Line content (from capture-pane): '$line'" >> "$DEBUG_LOG"
 
     # Calculate word range
     local range
